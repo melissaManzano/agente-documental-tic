@@ -1,60 +1,141 @@
-"""Aplicación académica LOCAL. No desplegar públicamente sin autenticación de usuarios."""
+"""Archivo TIC IA.
+
+Modo local (por defecto): prototipo de laboratorio; sincronización solo desde localhost.
+Modo web (Vercel o APP_MODE=web): exige Google Sign-In y lista de cuentas permitidas;
+la sincronización con Drive queda deshabilitada y se sigue haciendo en local.
+"""
+import logging
 from pathlib import Path
 from ipaddress import ip_address
 from fastapi import FastAPI, HTTPException, Request, Depends
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from app.core.config import settings
+from starlette.middleware.sessions import SessionMiddleware
+from app.core.config import Settings, settings
 from app.models.documento import AskRequest, AskResponse
 from app.services.sync_service import SyncService
 from app.services.agent_service import AgentService
+from app.services.catalog import ManifestCatalog, VectorStoreCatalog
 
 ROOT = Path(__file__).resolve().parents[1]
-app = FastAPI(title="Archivo TIC IA", version="1.0.0")
-app.mount("/assets", StaticFiles(directory=ROOT / "assets"), name="assets")
+log = logging.getLogger("archivo_tic")
 
-def local_only(request: Request):
-    """Defensa básica para el laboratorio; no equivale a autenticación pública."""
-    host = request.client.host if request.client else ""
-    try:
-        if not ip_address(host).is_loopback: raise ValueError()
-    except ValueError:
-        raise HTTPException(status_code=403, detail="Sincronización disponible solo desde localhost")
-    key = settings.local_admin_key
-    if key and request.headers.get("X-Admin-Key") != key:
-        raise HTTPException(status_code=401, detail="Clave administrativa incorrecta")
 
-@app.get("/")
-def index():
-    return FileResponse(ROOT / "index.html")
+def create_app(cfg: Settings) -> FastAPI:
+    app = FastAPI(title="Archivo TIC IA", version="1.1.0")
+    auth = None
+    if cfg.web_mode:
+        missing = cfg.missing_web_settings()
+        if missing:
+            # Falla al arrancar (visible en los logs de Vercel) en lugar de quedar abierta.
+            raise RuntimeError("Modo web sin configurar. Faltan variables: " + ", ".join(missing))
+        from app.core.auth import WebAuth
+        auth = WebAuth(cfg)
+        app.add_middleware(SessionMiddleware, secret_key=cfg.session_secret, session_cookie="archivo_tic_session",
+                           max_age=8 * 3600, same_site="lax", https_only=True)
 
-@app.get("/api/health")
-def health():
-    return {"status": "ok", "configured": bool(settings.openai_api_key and settings.drive_folder_id)}
+    def require_user(request: Request):
+        """Modo local: sin cuentas (uso en la propia computadora). Modo web: sesión obligatoria."""
+        return auth.current_user(request) if auth else None
 
-@app.get("/api/documents")
-def documents():
-    doc = SyncService.load_manifest()
-    return {"documents": list(doc.get("documents", {}).values()),
-            "indexed": len(doc.get("documents", {})),
-            "vector_store_configured": bool(settings.vector_store_id or doc.get("vector_store_id"))}
+    def local_only(request: Request):
+        """Defensa básica para el laboratorio; no equivale a autenticación pública."""
+        if cfg.web_mode:
+            # En Vercel la app corre detrás de un adaptador y la IP del cliente puede aparecer
+            # como 127.0.0.1, así que la comprobación de loopback no es confiable allí.
+            raise HTTPException(status_code=403, detail="La sincronización con Drive solo se ejecuta en el entorno local")
+        host = request.client.host if request.client else ""
+        try:
+            if not ip_address(host).is_loopback: raise ValueError()
+        except ValueError:
+            raise HTTPException(status_code=403, detail="Sincronización disponible solo desde localhost")
+        key = cfg.local_admin_key
+        if key and request.headers.get("X-Admin-Key") != key:
+            raise HTTPException(status_code=401, detail="Clave administrativa incorrecta")
 
-@app.post("/api/ask", response_model=AskResponse)
-def ask(payload: AskRequest):
-    try:
-        if not settings.openai_api_key: raise ValueError("Falta OPENAI_API_KEY")
-        return AgentService().ask(payload.question, payload.use_search)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    except Exception:
-        raise HTTPException(status_code=502, detail="Error al consultar OpenAI. Revisa el registro local.")
+    def catalog():
+        if cfg.web_mode:
+            return VectorStoreCatalog(AgentService().client, cfg.vector_store_id)
+        return ManifestCatalog(SyncService.load_manifest())
 
-@app.post("/api/sync", dependencies=[Depends(local_only)])
-def sync():
-    try:
-        if not settings.openai_api_key: raise ValueError("Falta OPENAI_API_KEY")
-        return SyncService().sync()
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Sincronización fallida: {exc}")
+    @app.get("/")
+    def index():
+        return FileResponse(ROOT / "index.html")
+
+    @app.get("/api/health")
+    def health():
+        if cfg.web_mode: return {"status": "ok"}  # no revela detalles de configuración en Internet
+        return {"status": "ok", "configured": bool(cfg.openai_api_key and cfg.drive_folder_id)}
+
+    @app.get("/api/me")
+    def me(request: Request):
+        if not auth: return {"mode": "local", "user": None}
+        try:
+            return {"mode": "web", "user": auth.current_user(request)}
+        except HTTPException:
+            return {"mode": "web", "user": None}
+
+    @app.get("/auth/login")
+    def login(request: Request):
+        if not auth: raise HTTPException(status_code=404)
+        return RedirectResponse(auth.login_url(request), status_code=302)
+
+    @app.get("/auth/callback")
+    def callback(request: Request, code: str = "", state: str = "", error: str = ""):
+        if not auth: raise HTTPException(status_code=404)
+        if error or not code:
+            return RedirectResponse("/?auth=cancelado", status_code=302)
+        try:
+            auth.complete_login(request, code, state)
+        except HTTPException as exc:
+            return RedirectResponse("/?auth=" + ("denegado" if exc.status_code == 403 else "error"), status_code=302)
+        return RedirectResponse("/", status_code=302)
+
+    @app.post("/auth/logout")
+    def logout(request: Request):
+        if auth: request.session.clear()
+        return {"success": True}
+
+    @app.get("/api/documents", dependencies=[Depends(require_user)])
+    def documents():
+        if cfg.web_mode:
+            try:
+                docs = catalog().documents()
+            except Exception:
+                log.exception("Fallo al listar el Vector Store")
+                raise HTTPException(status_code=502, detail="No se pudo leer el índice documental")
+            return {"documents": docs, "indexed": len(docs), "vector_store_configured": True}
+        doc = SyncService.load_manifest()
+        return {"documents": list(doc.get("documents", {}).values()),
+                "indexed": len(doc.get("documents", {})),
+                "vector_store_configured": bool(cfg.vector_store_id or doc.get("vector_store_id"))}
+
+    @app.post("/api/ask", response_model=AskResponse, dependencies=[Depends(require_user)])
+    def ask(payload: AskRequest):
+        try:
+            if not cfg.openai_api_key: raise ValueError("Falta OPENAI_API_KEY")
+            agent = AgentService(catalog=catalog() if cfg.web_mode else None)
+            return agent.ask(payload.question, payload.use_search)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        except Exception:
+            log.exception("Fallo en /api/ask")  # aparece en la terminal local o en los logs de Vercel
+            raise HTTPException(status_code=502, detail="Error al consultar OpenAI. Revisa el registro del servidor.")
+
+    @app.post("/api/sync", dependencies=[Depends(local_only)])
+    def sync():
+        try:
+            if not cfg.openai_api_key: raise ValueError("Falta OPENAI_API_KEY")
+            return SyncService().sync()
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        except Exception as exc:
+            log.exception("Fallo en /api/sync")
+            raise HTTPException(status_code=502, detail=f"Sincronización fallida: {exc}")
+
+    # Al final: así las rutas declaradas arriba tienen prioridad sobre los archivos que Vercel sube al CDN.
+    app.mount("/assets", StaticFiles(directory=ROOT / "assets"), name="assets")
+    return app
+
+
+app = create_app(settings)
