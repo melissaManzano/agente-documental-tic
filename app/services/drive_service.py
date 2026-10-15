@@ -40,7 +40,7 @@ class DriveService:
         while True:
             result = self.service.files().list(q=query, pageSize=100, pageToken=page,
                 fields="nextPageToken,files(id,name,mimeType,modifiedTime,webViewLink,size)",
-                orderBy="name").execute()
+                orderBy="name", supportsAllDrives=True, includeItemsFromAllDrives=True).execute()
             files.extend(result.get("files", []))
             page = result.get("nextPageToken")
             if not page: return files
@@ -53,7 +53,7 @@ class DriveService:
             filename = item["name"] + ".txt"
             target_mime = "text/plain"
         elif mime in ("application/pdf", "text/plain"):
-            req = self.service.files().get_media(fileId=file_id)
+            req = self.service.files().get_media(fileId=file_id, supportsAllDrives=True)
             filename, target_mime = item["name"], mime
         else:
             raise ValueError("Formato no admitido: " + mime)

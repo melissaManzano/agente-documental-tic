@@ -48,7 +48,9 @@ class SyncService:
             self.save_manifest(manifest)
             source = self.drive.list_files(settings.drive_folder_id)
             eligible = {x["id"]: x for x in source if x["mimeType"] in SUPPORTED}
-            stats = {"added": 0, "updated": 0, "removed": 0, "unchanged": 0, "errors": []}
+            stats = {"added": 0, "updated": 0, "removed": 0, "unchanged": 0, "errors": [],
+                     "skipped": [{"file": x["name"], "mime_type": x["mimeType"]}
+                                 for x in source if x["mimeType"] not in SUPPORTED]}
             for drive_id, item in eligible.items():
                 previous = docs.get(drive_id)
                 if previous and previous.get("modified_time") == item.get("modifiedTime"):
