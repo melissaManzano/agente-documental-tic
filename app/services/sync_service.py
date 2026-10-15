@@ -3,7 +3,6 @@ Nota: eliminar archivos de un vector store puede tener consistencia eventual.
 """
 import json
 import os
-import tempfile
 import threading
 from pathlib import Path
 from openai import OpenAI
@@ -57,17 +56,14 @@ class SyncService:
                     stats["unchanged"] += 1
                     continue
                 try:
-                    raw, filename, _ = self.drive.get_bytes(item)
+                    raw, filename, target_mime = self.drive.get_bytes(item)
                     if not raw: raise ValueError("El archivo está vacío")
-                    suffix = ".pdf" if filename.lower().endswith(".pdf") else ".txt"
-                    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as temp:
-                        temp.write(raw)
-                        path = Path(temp.name)
-                    try:
-                        with path.open("rb") as fh:
-                            upload = self.client.vector_stores.files.upload_and_poll(vector_store_id=store, file=fh)
-                    finally:
-                        path.unlink(missing_ok=True)
+                    # Se sube con el nombre real de Drive para que el modelo y las citas lo reconozcan;
+                    # OpenAI deduce el formato por la extensión.
+                    suffix = ".pdf" if target_mime == "application/pdf" else ".txt"
+                    if not filename.lower().endswith(suffix): filename += suffix
+                    upload = self.client.vector_stores.files.upload_and_poll(
+                        vector_store_id=store, file=(filename, raw))
                     if upload.status != "completed": raise RuntimeError("Indexación no completada: " + upload.status)
                     # Solo se elimina la versión antigua después de indexar exitosamente la nueva.
                     if previous:
