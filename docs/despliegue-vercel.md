@@ -8,8 +8,8 @@ qué errores aparecieron y cómo se corrigieron. **El prototipo local no cambia 
 | | Modo local (`python app.py`) | Modo web (Vercel) |
 |---|---|---|
 | Se activa | Por defecto | Automáticamente si existe `VERCEL`, o con `APP_MODE=web` |
-| Usuarios | Sin cuentas (equipo propio) | Google Sign-In (`openid email`) + lista `ALLOWED_EMAILS` / `ALLOWED_DOMAIN` |
-| Sesión | — | Cookie firmada (`SESSION_SECRET`), `Secure`, `SameSite=Lax`, 8 h |
+| Acceso | Sin cuentas (equipo propio) | Contraseña compartida `ACCESS_PASSWORD` (`POST /auth/login`, solo JSON) |
+| Sesión | — | Cookie firmada (`SESSION_SECRET`), `Secure`, `SameSite=Lax`, 8 h; se invalida si cambia la contraseña |
 | Lectura de Drive | OAuth Desktop (`drive.readonly`), `token.json` | **No accede a Drive** |
 | `POST /api/sync` | Solo loopback (+ `X-Admin-Key` opcional) | **403 siempre** |
 | `GET /api/documents`, `POST /api/ask` | Abiertos en localhost | **Requieren sesión** (401) |
@@ -19,7 +19,12 @@ qué errores aparecieron y cómo se corrigieron. **El prototipo local no cambia 
 **Decisión de arquitectura.** La sincronización Drive → OpenAI se mantiene en el entorno local de
 administración y Vercel solo consulta el Vector Store ya indexado. Así el servidor público nunca
 guarda tokens de Drive ni usa el alcance restringido `drive.readonly` (que exigiría verificación de
-Google y auditoría de seguridad), y el inicio de sesión web solo usa alcances no sensibles.
+Google y auditoría de seguridad).
+
+**Acceso con contraseña.** Se evaluó Google Sign-In (OpenID Connect con `state`, `nonce` y lista de
+correos), pero exige crear un cliente OAuth *Web* y configurar unas 8 variables. Para el alcance del
+reto se eligió una contraseña compartida: 4 variables y ningún cambio en Google Cloud. Protege los
+créditos de OpenAI y el índice, aunque no identifica a cada persona (ver limitaciones).
 
 ## 2. Variables de entorno en Vercel
 
@@ -27,15 +32,13 @@ Google y auditoría de seguridad), y el inicio de sesión web solo usa alcances 
 
 | Variable | Tipo | Valor |
 |---|---|---|
+| Variable | Tipo | Valor |
+|---|---|---|
 | `OPENAI_API_KEY` | Secret | Clave **distinta** a la local, con presupuesto propio |
-| `OPENAI_MODEL` | Config | `gpt-4.1-mini` |
 | `VECTOR_STORE_ID` | Config | ID `vs_...` de `data/manifest.json` |
-| `GOOGLE_CLIENT_ID` | Config | Cliente OAuth **Web application** (no el Desktop) |
-| `GOOGLE_CLIENT_SECRET` | Secret | Del mismo cliente Web |
-| `OAUTH_REDIRECT_URI` | Config | `https://<dominio>.vercel.app/auth/callback` (idéntica a la registrada en Google) |
+| `ACCESS_PASSWORD` | Secret | ≥ 12 caracteres; se comparte solo con quien debe consultar |
 | `SESSION_SECRET` | Secret | ≥ 32 caracteres aleatorios: `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
-| `ALLOWED_EMAILS` | Config | Correos separados por coma |
-| `ALLOWED_DOMAIN` | Config | Opcional: dominio de Google Workspace (se valida con el claim `hd`) |
+| `OPENAI_MODEL` | Config | Opcional; por defecto `gpt-4.1-mini` |
 
 No se configuran: `GOOGLE_DRIVE_FOLDER_ID`, `LOCAL_ADMIN_KEY`, `PORT`, `credentials.json`, `token.json`.
 Si falta alguna obligatoria, la app **no arranca** y el log muestra los nombres que faltan (nunca valores).
@@ -44,19 +47,17 @@ Si falta alguna obligatoria, la app **no arranca** y el log muestra los nombres 
 
 1. **Reindexar en local** para que cada archivo del Vector Store tenga `attributes`:
    `python scripts/forzar_reindexacion.py` y después *Sincronizar desde Drive*.
-2. **Google Cloud → Google Auth Platform → Clientes → Crear cliente → Aplicación web.**
-   URI de redirección: `https://<dominio>.vercel.app/auth/callback`.
-3. **Vercel → Add New → Project → Import** `melissaManzano/agente-documental-tic`.
-   Framework preset: FastAPI (detectado por `pyproject.toml`). Configurar las variables del punto 2.
-4. Desplegar, abrir *Deployments → Build Logs / Runtime Logs* y registrar errores en la bitácora.
-5. *Settings → Deployment Protection*: proteger los despliegues de Preview.
+2. **Vercel → Add New → Project → Import** `melissaManzano/agente-documental-tic`.
+   Framework preset: FastAPI. Configurar las variables del punto 2.
+3. Desplegar, abrir *Deployments → Build Logs / Runtime Logs* y registrar errores en la bitácora.
+4. *Settings → Deployment Protection*: proteger los despliegues de Preview.
 
 ## 4. Problemas detectados antes del despliegue
 
 | # | Problema | Causa | Corrección |
 |---|---|---|---|
-| 1 | Punto de entrada ambiguo | `app.py` (raíz) y el paquete `app/` comparten el nombre `app` | `pyproject.toml` → `[tool.vercel] entrypoint = "app.main:app"` |
-| 2 | OAuth Desktop imposible | `run_local_server()` abre un navegador en el servidor | Modo web con Google Sign-In (`/auth/login`, `/auth/callback`), `state` + `nonce`, verificación del `id_token` |
+| 1 | Punto de entrada ambiguo | `app.py` (raíz) y el paquete `app/` comparten el nombre `app` | `index.py` como punto de entrada + `.vercelignore` excluye `app.py` (ver bitácora) |
+| 2 | OAuth Desktop imposible | `run_local_server()` abre un navegador en el servidor | Vercel no accede a Drive; el acceso web es con contraseña (`ACCESS_PASSWORD`) y sesión firmada |
 | 3 | `token.json` y `manifest.json` no persisten | Sistema de archivos de solo lectura; `/tmp` es efímero | Vercel no usa Drive; el catálogo sale de los `attributes` del Vector Store |
 | 4 | `local_only` no es confiable | Tras el adaptador de Vercel la IP del cliente puede verse como loopback | En modo web `/api/sync` responde 403 sin mirar la IP |
 | 5 | `/api/ask` y `/api/documents` públicos | Sin autenticación | Dependencia `require_user` (401 sin sesión) |
@@ -67,11 +68,15 @@ Si falta alguna obligatoria, la app **no arranca** y el log muestra los nombres 
 
 | Fecha | Despliegue | Error observado (log) | Causa | Corrección / commit |
 |---|---|---|---|---|
-| | | | | |
+| 2026-10-15 | `dpl_HFey4xHR…` (production, `main`) | `500 FUNCTION_INVOCATION_FAILED`. Runtime log: `could not import "app.py"` → `ModuleNotFoundError: No module named 'app.main'; 'app' is not a package` | Vercel elige `app.py` (primer candidato) y lo importa como módulo `app`; dentro, `from app.main import app` busca en ese mismo archivo y no en el paquete `app/`. El `entrypoint` de `pyproject.toml` no se respetó. Cargar `app/main.py` con el nombre `app` falla igual | Nuevo `index.py` (`from app.main import app`), `entrypoint = "index:app"` y `.vercelignore` con `/app.py`. Verificado en local simulando el cargador de Vercel (`spec_from_file_location`): `GET /` 200, `/api/ask` 401, `/api/sync` 403. El arranque local con `python app.py` no cambia |
 
 ## 6. Limitaciones conocidas
 
-- Todos los usuarios autorizados ven el mismo índice: no hay permisos por documento.
-- Sin límite de peticiones por usuario; el tope es el presupuesto del proyecto de OpenAI
-  (opcional: regla de *Rate Limit* del Vercel WAF sobre `/api/ask`).
+- Una sola contraseña compartida: no identifica a cada persona ni permite revocar a alguien en
+  particular (se cambia `ACCESS_PASSWORD` y se vuelve a desplegar; las sesiones previas caducan).
+  Trabajo futuro: Google Sign-In con lista de correos.
+- Cada intento fallido espera 1 s, pero no hay bloqueo por IP; usar una contraseña larga
+  (opcional: regla de *Rate Limit* del Vercel WAF sobre `/auth/login` y `/api/ask`).
+- Todos los usuarios ven el mismo índice: no hay permisos por documento.
+- El tope de gasto es el presupuesto del proyecto de OpenAI.
 - La sincronización automática desde Vercel (Cron + cuenta de servicio) queda como trabajo futuro.

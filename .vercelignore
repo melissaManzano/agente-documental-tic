@@ -1,0 +1,8 @@
+# app.py solo arranca uvicorn en local; en Vercel su nombre choca con el paquete app/.
+/app.py
+tests/
+scripts/
+docs/
+data/
+documentos-prueba/
+.venv/
