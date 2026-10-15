@@ -55,7 +55,7 @@ Si falta alguna obligatoria, la app **no arranca** y el log muestra los nombres 
 
 | # | Problema | Causa | Corrección |
 |---|---|---|---|
-| 1 | Punto de entrada ambiguo | `app.py` (raíz) y el paquete `app/` comparten el nombre `app` | `pyproject.toml` → `[tool.vercel] entrypoint = "app.main:app"` |
+| 1 | Punto de entrada ambiguo | `app.py` (raíz) y el paquete `app/` comparten el nombre `app` | `index.py` como punto de entrada + `.vercelignore` excluye `app.py` (ver bitácora) |
 | 2 | OAuth Desktop imposible | `run_local_server()` abre un navegador en el servidor | Modo web con Google Sign-In (`/auth/login`, `/auth/callback`), `state` + `nonce`, verificación del `id_token` |
 | 3 | `token.json` y `manifest.json` no persisten | Sistema de archivos de solo lectura; `/tmp` es efímero | Vercel no usa Drive; el catálogo sale de los `attributes` del Vector Store |
 | 4 | `local_only` no es confiable | Tras el adaptador de Vercel la IP del cliente puede verse como loopback | En modo web `/api/sync` responde 403 sin mirar la IP |
@@ -67,7 +67,7 @@ Si falta alguna obligatoria, la app **no arranca** y el log muestra los nombres 
 
 | Fecha | Despliegue | Error observado (log) | Causa | Corrección / commit |
 |---|---|---|---|---|
-| | | | | |
+| 2026-10-15 | `dpl_HFey4xHR…` (production, `main`) | `500 FUNCTION_INVOCATION_FAILED`. Runtime log: `could not import "app.py"` → `ModuleNotFoundError: No module named 'app.main'; 'app' is not a package` | Vercel elige `app.py` (primer candidato) y lo importa como módulo `app`; dentro, `from app.main import app` busca en ese mismo archivo y no en el paquete `app/`. El `entrypoint` de `pyproject.toml` no se respetó. Cargar `app/main.py` con el nombre `app` falla igual | Nuevo `index.py` (`from app.main import app`), `entrypoint = "index:app"` y `.vercelignore` con `/app.py`. Verificado en local simulando el cargador de Vercel (`spec_from_file_location`): `GET /` 200, `/api/ask` 401, `/api/sync` 403. El arranque local con `python app.py` no cambia |
 
 ## 6. Limitaciones conocidas
 

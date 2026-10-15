@@ -19,5 +19,6 @@ dependencies = [
 ]
 
 [tool.vercel]
-# app.py (raíz) y el paquete app/ comparten el nombre "app"; se indica el módulo exacto.
-entrypoint = "app.main:app"
+# app.py (raíz) y el paquete app/ comparten el nombre "app": Vercel usa index.py
+# (además, .vercelignore excluye app.py del despliegue).
+entrypoint = "index:app"
