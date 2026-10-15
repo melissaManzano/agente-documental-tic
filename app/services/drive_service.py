@@ -1,6 +1,7 @@
 """Drive con OAuth local: un usuario, una carpeta, solo lectura."""
 from pathlib import Path
 from io import BytesIO
+from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -18,7 +19,12 @@ class DriveService:
         if token.exists():
             creds = Credentials.from_authorized_user_file(str(token), SCOPES)
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+            try:
+                creds.refresh(Request())
+            except RefreshError:
+                # Token revocado o caducado (en modo Testing dura 7 días): se repite el consentimiento.
+                token.unlink(missing_ok=True)
+                creds = None
         if not creds or not creds.valid:
             if not credentials_file.exists():
                 raise RuntimeError("Falta credentials.json. Configura OAuth Desktop en Google Cloud.")
@@ -34,7 +40,7 @@ class DriveService:
         while True:
             result = self.service.files().list(q=query, pageSize=100, pageToken=page,
                 fields="nextPageToken,files(id,name,mimeType,modifiedTime,webViewLink,size)",
-                orderBy="name").execute()
+                orderBy="name", supportsAllDrives=True, includeItemsFromAllDrives=True).execute()
             files.extend(result.get("files", []))
             page = result.get("nextPageToken")
             if not page: return files
@@ -47,7 +53,7 @@ class DriveService:
             filename = item["name"] + ".txt"
             target_mime = "text/plain"
         elif mime in ("application/pdf", "text/plain"):
-            req = self.service.files().get_media(fileId=file_id)
+            req = self.service.files().get_media(fileId=file_id, supportsAllDrives=True)
             filename, target_mime = item["name"], mime
         else:
             raise ValueError("Formato no admitido: " + mime)
