@@ -10,4 +10,6 @@ export class ApiClient {
   documents() { return this.request('/api/documents'); }
   ask(question, useSearch) { return this.request('/api/ask', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question,use_search:useSearch})}); }
   sync() {return this.request('/api/sync',{method:'POST'});}
+  me() { return this.request('/api/me'); }
+  logout() { return this.request('/auth/logout',{method:'POST'}); }
 }
