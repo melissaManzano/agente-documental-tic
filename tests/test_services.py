@@ -29,11 +29,13 @@ class FakeDrive:
 
 class FakeVectorFiles:
     def __init__(self):
-        self.uploaded, self.deleted, self.count = [], [], 0
+        self.uploaded, self.deleted, self.attributes, self.count = [], [], [], 0
+        self.purged = []  # borrados de OpenAI Files
 
-    def upload_and_poll(self, vector_store_id, file):
+    def upload_and_poll(self, vector_store_id, file, attributes=None):
         self.count += 1
         self.uploaded.append(file[0])
+        self.attributes.append(attributes)
         return NS(id=f"file-{self.count}", status="completed")
 
     def delete(self, vector_store_id, file_id):
@@ -42,7 +44,9 @@ class FakeVectorFiles:
 
 def fake_openai():
     files = FakeVectorFiles()
-    return NS(vector_stores=NS(create=lambda name: NS(id="vs_test"), files=files)), files
+    client = NS(vector_stores=NS(create=lambda name: NS(id="vs_test"), files=files),
+                files=NS(delete=files.purged.append))
+    return client, files
 
 
 def item(id_, name, mime, modified="2026-01-01T00:00:00Z"):
@@ -58,12 +62,16 @@ def test_sync_altas_cambios_bajas_y_omitidos():
     assert first["skipped"] == [{"file": "notas.docx", "mime_type": drive.files[2]["mimeType"]}]
     # Nombre real de Drive y extensión garantizada para los Google Docs exportados.
     assert files.uploaded == ["guia.pdf", "Glosario.txt"]
+    # Attributes que el modo web usa como catálogo.
+    assert files.attributes[1] == {"drive_id": "b", "name": "Glosario", "mime_type": GDOC,
+                                   "url": "https://docs.google.com/document/d/b/edit"}
 
     drive.files = [item("a", "guia.pdf", PDF, modified="2026-02-01T00:00:00Z")]
     second = SyncService(client=client, drive=drive).sync()["stats"]
     assert (second["updated"], second["removed"], second["added"]) == (1, 1, 0)
     # Se borran la versión anterior del PDF y el Google Doc eliminado.
     assert sorted(files.deleted) == ["file-1", "file-2"]
+    assert sorted(files.purged) == ["file-1", "file-2"]  # tampoco quedan huérfanos en OpenAI Files
     manifest = SyncService.load_manifest()
     assert list(manifest["documents"]) == ["a"]
     assert manifest["documents"]["a"]["openai_file_id"] == "file-3"
