@@ -11,5 +11,6 @@ export class ApiClient {
   ask(question, useSearch) { return this.request('/api/ask', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question,use_search:useSearch})}); }
   sync() {return this.request('/api/sync',{method:'POST'});}
   me() { return this.request('/api/me'); }
+  login(password) { return this.request('/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password})}); }
   logout() { return this.request('/auth/logout',{method:'POST'}); }
 }

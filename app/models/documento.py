@@ -4,6 +4,9 @@ class AskRequest(BaseModel):
     question: str = Field(min_length=3, max_length=3000)
     use_search: bool = True
 
+class LoginRequest(BaseModel):
+    password: str = Field(min_length=1, max_length=200)
+
 class Source(BaseModel):
     name: str
     url: str | None = None

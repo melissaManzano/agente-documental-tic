@@ -1,18 +1,18 @@
 """Archivo TIC IA.
 
 Modo local (por defecto): prototipo de laboratorio; sincronización solo desde localhost.
-Modo web (Vercel o APP_MODE=web): exige Google Sign-In y lista de cuentas permitidas;
+Modo web (Vercel o APP_MODE=web): exige contraseña de acceso (ACCESS_PASSWORD) y sesión firmada;
 la sincronización con Drive queda deshabilitada y se sigue haciendo en local.
 """
 import logging
 from pathlib import Path
 from ipaddress import ip_address
 from fastapi import FastAPI, HTTPException, Request, Depends
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from app.core.config import Settings, settings
-from app.models.documento import AskRequest, AskResponse
+from app.models.documento import AskRequest, AskResponse, LoginRequest
 from app.services.sync_service import SyncService
 from app.services.agent_service import AgentService
 from app.services.catalog import ManifestCatalog, VectorStoreCatalog
@@ -75,21 +75,11 @@ def create_app(cfg: Settings) -> FastAPI:
         except HTTPException:
             return {"mode": "web", "user": None}
 
-    @app.get("/auth/login")
-    def login(request: Request):
+    @app.post("/auth/login")
+    def login(payload: LoginRequest, request: Request):
+        # Solo JSON: un formulario de otro sitio no puede enviarlo sin pasar por CORS.
         if not auth: raise HTTPException(status_code=404)
-        return RedirectResponse(auth.login_url(request), status_code=302)
-
-    @app.get("/auth/callback")
-    def callback(request: Request, code: str = "", state: str = "", error: str = ""):
-        if not auth: raise HTTPException(status_code=404)
-        if error or not code:
-            return RedirectResponse("/?auth=cancelado", status_code=302)
-        try:
-            auth.complete_login(request, code, state)
-        except HTTPException as exc:
-            return RedirectResponse("/?auth=" + ("denegado" if exc.status_code == 403 else "error"), status_code=302)
-        return RedirectResponse("/", status_code=302)
+        return {"success": True, "user": auth.login(request, payload.password)}
 
     @app.post("/auth/logout")
     def logout(request: Request):
