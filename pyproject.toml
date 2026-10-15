@@ -1,0 +1,23 @@
+# Configuración para el despliegue en Vercel (el entorno local sigue usando requirements.txt).
+# Mantén estas dependencias alineadas con requirements.txt (sin las de pruebas).
+[project]
+name = "agente-documental-tic"
+version = "1.1.0"
+description = "Archivo TIC IA: agente documental con Google Drive y OpenAI File Search (RAG)"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115,<1",
+    "openai>=1.80,<3",
+    "python-dotenv>=1,<2",
+    "google-api-python-client>=2.140,<3",
+    "google-auth-httplib2>=0.2,<1",
+    "google-auth-oauthlib>=1.2,<2",
+    "pydantic>=2,<3",
+    "httpx>=0.27,<1",
+    "requests>=2.31,<3",
+    "itsdangerous>=2.1,<3",
+]
+
+[tool.vercel]
+# app.py (raíz) y el paquete app/ comparten el nombre "app"; se indica el módulo exacto.
+entrypoint = "app.main:app"
