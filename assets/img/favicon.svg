@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Archivo TIC IA">
+  <defs>
+    <linearGradient id="fondo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#102840"/>
+      <stop offset="1" stop-color="#15526b"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#fondo)"/>
+  <!-- Documento del archivo -->
+  <path d="M15 10h20l11 11v31a2 2 0 0 1-2 2H15a2 2 0 0 1-2-2V12a2 2 0 0 1 2-2z" fill="#ffffff"/>
+  <path d="M35 10v9a2 2 0 0 0 2 2h9z" fill="#b6eaf4"/>
+  <g stroke="#15526b" stroke-width="3.2" stroke-linecap="round">
+    <path d="M20 29h17"/>
+    <path d="M20 36h13"/>
+    <path d="M20 43h9"/>
+  </g>
+  <!-- Chispa de IA -->
+  <path d="M47 33c1.4 6.2 3.8 8.6 10 10-6.2 1.4-8.6 3.8-10 10-1.4-6.2-3.8-8.6-10-10 6.2-1.4 8.6-3.8 10-10z"
+        fill="#5bdded" stroke="#102840" stroke-width="2.5" stroke-linejoin="round"/>
+</svg>

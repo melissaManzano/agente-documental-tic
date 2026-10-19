@@ -62,6 +62,11 @@ def create_app(cfg: Settings) -> FastAPI:
     def index():
         return FileResponse(ROOT / "index.html")
 
+    @app.get("/favicon.ico", include_in_schema=False)
+    def favicon():
+        # Algunos navegadores lo piden aunque index.html declare el SVG.
+        return FileResponse(ROOT / "assets" / "img" / "favicon-32.png", media_type="image/png")
+
     @app.get("/api/health")
     def health():
         if cfg.web_mode: return {"status": "ok"}  # no revela detalles de configuración en Internet
