@@ -49,6 +49,15 @@ def fake_openai():
     return client, files
 
 
+class FakeSummarizer:
+    def summarize(self, raw, filename, mime):
+        return {"summary": f"Resumen de {filename}", "questions": ["¿Pregunta 1?", "¿Pregunta 2?"]}
+
+
+def servicio(client, drive):
+    return SyncService(client=client, drive=drive, summarizer=FakeSummarizer())
+
+
 def item(id_, name, mime, modified="2026-01-01T00:00:00Z"):
     return {"id": id_, "name": name, "mimeType": mime, "modifiedTime": modified}
 
@@ -57,17 +66,21 @@ def test_sync_altas_cambios_bajas_y_omitidos():
     client, files = fake_openai()
     drive = FakeDrive([item("a", "guia.pdf", PDF), item("b", "Glosario", GDOC),
                        item("c", "notas.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")])
-    first = SyncService(client=client, drive=drive).sync()["stats"]
+    first = servicio(client, drive).sync()["stats"]
     assert (first["added"], first["unchanged"]) == (2, 0)
     assert first["skipped"] == [{"file": "notas.docx", "mime_type": drive.files[2]["mimeType"]}]
     # Nombre real de Drive y extensión garantizada para los Google Docs exportados.
     assert files.uploaded == ["guia.pdf", "Glosario.txt"]
     # Attributes que el modo web usa como catálogo.
     assert files.attributes[1] == {"drive_id": "b", "name": "Glosario", "mime_type": GDOC,
-                                   "url": "https://docs.google.com/document/d/b/edit"}
+                                   "url": "https://docs.google.com/document/d/b/edit",
+                                   "summary": "Resumen de Glosario.txt",
+                                   "questions": "¿Pregunta 1?\n¿Pregunta 2?"}
+    # La guía también queda en el manifiesto para el modo local.
+    assert SyncService.load_manifest()["documents"]["b"]["questions"] == ["¿Pregunta 1?", "¿Pregunta 2?"]
 
     drive.files = [item("a", "guia.pdf", PDF, modified="2026-02-01T00:00:00Z")]
-    second = SyncService(client=client, drive=drive).sync()["stats"]
+    second = servicio(client, drive).sync()["stats"]
     assert (second["updated"], second["removed"], second["added"]) == (1, 1, 0)
     # Se borran la versión anterior del PDF y el Google Doc eliminado.
     assert sorted(files.deleted) == ["file-1", "file-2"]
@@ -80,8 +93,8 @@ def test_sync_altas_cambios_bajas_y_omitidos():
 def test_sync_sin_cambios_no_vuelve_a_subir():
     client, files = fake_openai()
     drive = FakeDrive([item("a", "guia.pdf", PDF)])
-    SyncService(client=client, drive=drive).sync()
-    stats = SyncService(client=client, drive=drive).sync()["stats"]
+    servicio(client, drive).sync()
+    stats = servicio(client, drive).sync()["stats"]
     assert stats["unchanged"] == 1 and files.count == 1
 
 

@@ -8,15 +8,17 @@ from pathlib import Path
 from openai import OpenAI
 from app.core.config import settings
 from app.services.drive_service import DriveService
+from app.services.summary_service import SummaryService
 
 MANIFEST = Path(__file__).resolve().parents[2] / "data" / "manifest.json"
 _LOCK = threading.Lock()
 SUPPORTED = {"application/pdf", "text/plain", "application/vnd.google-apps.document"}
 
 class SyncService:
-    def __init__(self, client=None, drive=None):
+    def __init__(self, client=None, drive=None, summarizer=None):
         self.client = client or OpenAI(api_key=settings.openai_api_key)
         self.drive = drive or DriveService()
+        self.summarizer = summarizer or SummaryService(self.client, settings.openai_model)
 
     @staticmethod
     def load_manifest() -> dict:
@@ -74,8 +76,11 @@ class SyncService:
                         "https://docs.google.com/document/d/" + drive_id + "/edit" if item["mimeType"] == "application/vnd.google-apps.document" else "https://drive.google.com/file/d/" + drive_id + "/view")
                     # Los attributes viajan con el archivo en el Vector Store: el modo web (Vercel)
                     # los usa como catálogo porque allí no existe data/manifest.json.
+                    guide = self.summarizer.summarize(raw, filename, target_mime)
+                    # Los attributes admiten textos de hasta 512 caracteres: las preguntas van en líneas.
                     attributes = {"drive_id": drive_id, "name": item["name"][:512], "url": url[:512],
-                                  "mime_type": item["mimeType"]}
+                                  "mime_type": item["mimeType"], "summary": guide["summary"][:512],
+                                  "questions": "\n".join(guide["questions"])[:512]}
                     upload = self.client.vector_stores.files.upload_and_poll(
                         vector_store_id=store, file=(filename, raw), attributes=attributes)
                     if upload.status != "completed": raise RuntimeError("Indexación no completada: " + upload.status)
@@ -84,7 +89,8 @@ class SyncService:
                         self.remove_file(store, previous["openai_file_id"])
                     docs[drive_id] = {
                         "name": item["name"], "modified_time": item.get("modifiedTime"),
-                        "mime_type": item["mimeType"], "openai_file_id": upload.id, "url": url
+                        "mime_type": item["mimeType"], "openai_file_id": upload.id, "url": url,
+                        "summary": guide["summary"], "questions": guide["questions"]
                     }
                     self.save_manifest(manifest)
                     stats["updated" if previous else "added"] += 1

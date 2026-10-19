@@ -26,7 +26,9 @@ class VectorStoreCatalog:
     def _as_document(vs_file) -> dict | None:
         attrs = vs_file.attributes or {}
         if not attrs.get("name"): return None  # archivo indexado antes de guardar attributes
-        return {"name": attrs["name"], "url": attrs.get("url"), "mime_type": attrs.get("mime_type")}
+        questions = [q for q in str(attrs.get("questions") or "").split("\n") if q.strip()]
+        return {"name": attrs["name"], "url": attrs.get("url"), "mime_type": attrs.get("mime_type"),
+                "summary": attrs.get("summary") or "", "questions": questions}
 
     def documents(self) -> list[dict]:
         docs = (self._as_document(f) for f in
