@@ -74,12 +74,14 @@ def test_login_solo_acepta_json():
 
 
 def test_catalogo_desde_attributes_del_vector_store():
-    files = [NS(id="file-1", attributes={"name": "guia.pdf", "url": "https://drive.google.com/file/d/a/view"}),
+    files = [NS(id="file-1", attributes={"name": "guia.pdf", "url": "https://drive.google.com/file/d/a/view",
+                                         "summary": "Respaldos en RDS", "questions": "¿RTO?\n¿RPO?"}),
              NS(id="file-2", attributes=None)]  # indexado antes de guardar attributes: se omite
     store_files = NS(list=lambda **kw: iter(files),
                      retrieve=lambda file_id, vector_store_id: next(f for f in files if f.id == file_id))
     catalog = VectorStoreCatalog(NS(vector_stores=NS(files=store_files)), "vs_test")
     assert [d["name"] for d in catalog.documents()] == ["guia.pdf"]
+    assert catalog.documents()[0]["questions"] == ["¿RTO?", "¿RPO?"]
     assert catalog.lookup("file-1")["url"] == "https://drive.google.com/file/d/a/view"
     assert catalog.lookup("file-2") is None
     assert catalog.lookup("file-inexistente") is None
