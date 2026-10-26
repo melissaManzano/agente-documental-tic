@@ -8,7 +8,7 @@ qué errores aparecieron y cómo se corrigieron. **El prototipo local no cambia 
 | | Modo local (`python app.py`) | Modo web (Vercel) |
 |---|---|---|
 | Se activa | Por defecto | Automáticamente si existe `VERCEL`, o con `APP_MODE=web` |
-| Acceso | Sin cuentas (equipo propio) | **Público** si `ACCESS_PASSWORD` está vacía (configuración actual); con valor, contraseña compartida (`POST /auth/login`, solo JSON) |
+| Acceso | Sin cuentas (equipo propio) | **Público** (configuración actual). Solo con `REQUIRE_PASSWORD=true` + `ACCESS_PASSWORD` se pide contraseña compartida (`POST /auth/login`, solo JSON) |
 | Sesión | — | Solo con contraseña: cookie firmada (`SESSION_SECRET`), `Secure`, `SameSite=Lax`, 8 h; se invalida si cambia la contraseña |
 | Lectura de Drive | OAuth Desktop (`drive.readonly`), `token.json` | **No accede a Drive** |
 | `POST /api/sync` | Solo loopback (+ `X-Admin-Key` opcional) | **403 siempre** |
@@ -27,10 +27,10 @@ reto se eligió una contraseña compartida: 4 variables y ningún cambio en Goog
 créditos de OpenAI y el índice, aunque no identifica a cada persona (ver limitaciones).
 
 **Acceso público (decisión final).** Como el proyecto es escolar y sus documentos son ficticios, se
-dejó `ACCESS_PASSWORD` vacía para que cualquiera pueda consultar sin contraseña. Se acepta el riesgo
+hizo público: el código ignora `ACCESS_PASSWORD` mientras no exista `REQUIRE_PASSWORD=true`, así que no fue necesario borrar variables en Vercel. Se acepta el riesgo
 de que terceros consuman créditos; el límite es el saldo prepagado de OpenAI. La API Key sigue sin
 salir del servidor y la sincronización sigue cerrada. Para volver a exigir contraseña basta con
-definir `ACCESS_PASSWORD` y `SESSION_SECRET` en Vercel y volver a desplegar.
+agregar `REQUIRE_PASSWORD=true` (junto con `ACCESS_PASSWORD` y `SESSION_SECRET`) en Vercel y volver a desplegar.
 
 ## 2. Variables de entorno en Vercel
 
@@ -40,7 +40,8 @@ definir `ACCESS_PASSWORD` y `SESSION_SECRET` en Vercel y volver a desplegar.
 |---|---|---|
 | `OPENAI_API_KEY` | Secret | Clave **distinta** a la local, con presupuesto propio |
 | `VECTOR_STORE_ID` | Config | ID `vs_...` de `data/manifest.json` |
-| `ACCESS_PASSWORD` | Secret | **Opcional.** Vacía = sitio público. Con valor (≥ 12 caracteres) se pide contraseña |
+| `REQUIRE_PASSWORD` | Config | **Opcional.** Sin ella el sitio es público. `true` activa la contraseña |
+| `ACCESS_PASSWORD` | Secret | Solo con `REQUIRE_PASSWORD=true`: contraseña de ≥ 12 caracteres |
 | `SESSION_SECRET` | Secret | Solo si hay contraseña: ≥ 32 caracteres aleatorios (`python -c "import secrets; print(secrets.token_urlsafe(48))"`) |
 | `OPENAI_MODEL` | Config | Opcional; por defecto `gpt-4.1-mini` |
 
