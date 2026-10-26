@@ -324,6 +324,7 @@ a.doc-name[href]:hover { color: var(--cyan); text-decoration: underline; }
 .mode-badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .mode-badge.is-rag { color: #11775a; background: #e3f6ee; border: 1px solid #bfe8d6; }
 .mode-badge.is-model { color: #5b6b7c; background: #eef2f6; border: 1px solid #dbe3eb; }
+.mode-badge.is-out { color: #9a5b00; background: #fff4e0; border: 1px solid #f5d9a8; }
 
 .answer {
   padding: 1rem 1.15rem;

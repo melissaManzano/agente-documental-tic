@@ -15,3 +15,4 @@ class AskResponse(BaseModel):
     success: bool
     answer: str
     sources: list[Source]
+    out_of_scope: bool = False

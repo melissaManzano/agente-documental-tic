@@ -14,6 +14,7 @@ El alumno comprenderá que una organización necesita consultar documentos propi
 - `app/services/drive_service.py`: OAuth Desktop, listado limitado a una carpeta y descarga/exportación de archivos.
 - `app/services/sync_service.py`: Vector Store, manifiesto de archivos, altas, cambios y bajas.
 - `app/services/agent_service.py`: Responses API + File Search y fuentes verificadas por anotaciones de archivo.
+- `app/services/scope_service.py`: filtro de alcance; las preguntas ajenas a los documentos reciben un mensaje fijo y no llegan al agente.
 - `app/services/summary_service.py`: al sincronizar, genera la guía de cada documento (resumen y 3 preguntas sugeridas) que se muestra en la interfaz.
 - `index.html` y `assets/`: interfaz Bootstrap 5 y clases JavaScript.
 - `data/manifest.json`: estado local del índice (no se publica).
