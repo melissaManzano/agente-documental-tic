@@ -22,8 +22,10 @@ def cliente(**cambios):
 
 
 def test_modo_web_falla_cerrado_si_falta_configuracion():
-    with pytest.raises(RuntimeError, match="ACCESS_PASSWORD"):
-        create_app(Settings(**{**WEB, "access_password": ""}))
+    with pytest.raises(RuntimeError, match="OPENAI_API_KEY"):
+        create_app(Settings(**{**WEB, "openai_api_key": ""}))
+    with pytest.raises(RuntimeError, match="VECTOR_STORE_ID"):
+        create_app(Settings(**{**WEB, "vector_store_id": ""}))
     with pytest.raises(RuntimeError, match="mínimo 12"):
         create_app(Settings(**{**WEB, "access_password": "corta"}))
     with pytest.raises(RuntimeError, match="SESSION_SECRET"):
@@ -34,7 +36,20 @@ def test_endpoints_protegidos_sin_sesion():
     c = cliente()
     assert c.post("/api/ask", json={"question": "¿RTO?"}).status_code == 401
     assert c.get("/api/documents").status_code == 401
-    assert c.get("/api/me").json() == {"mode": "web", "user": None}
+    assert c.get("/api/me").json() == {"mode": "web", "auth": True, "user": None}
+
+
+def test_sin_contrasena_el_sitio_web_es_publico(monkeypatch):
+    # Sin ACCESS_PASSWORD tampoco se exige SESSION_SECRET.
+    c = cliente(access_password="", session_secret="")
+    assert c.get("/api/me").json() == {"mode": "web", "auth": False, "user": None}
+    store_files = NS(list=lambda **kw: iter([NS(id="f1", attributes={"name": "guia.pdf", "url": None})]))
+    monkeypatch.setattr("app.main.AgentService", lambda **kw: NS(client=NS(vector_stores=NS(files=store_files))))
+    assert c.get("/api/documents").json()["indexed"] == 1  # sin 401
+    assert c.post("/auth/login", json={"password": "x"}).status_code == 404
+    # Lo que no cambia: la sincronización sigue cerrada y health no revela configuración.
+    assert c.post("/api/sync").status_code == 403
+    assert c.get("/api/health").json() == {"status": "ok"}
 
 
 def test_health_no_revela_configuracion():

@@ -17,13 +17,18 @@ class Settings:
     session_secret: str = os.getenv("SESSION_SECRET", "")
 
     def missing_web_settings(self) -> list[str]:
-        """Nombres (nunca valores) de las variables obligatorias que faltan en modo web."""
-        required = {"OPENAI_API_KEY": self.openai_api_key, "VECTOR_STORE_ID": self.vector_store_id,
-                    "ACCESS_PASSWORD": self.access_password, "SESSION_SECRET": self.session_secret}
+        """Nombres (nunca valores) de las variables obligatorias que faltan en modo web.
+
+        ACCESS_PASSWORD es opcional: vacía = sitio público; con valor = se pide contraseña
+        y entonces SESSION_SECRET también es obligatoria.
+        """
+        required = {"OPENAI_API_KEY": self.openai_api_key, "VECTOR_STORE_ID": self.vector_store_id}
+        if self.access_password:
+            required["SESSION_SECRET"] = self.session_secret
         missing = [name for name, value in required.items() if not value]
         if 0 < len(self.access_password) < 12:
             missing.append("ACCESS_PASSWORD (mínimo 12 caracteres)")
-        if 0 < len(self.session_secret) < 32:
+        if self.access_password and 0 < len(self.session_secret) < 32:
             missing.append("SESSION_SECRET (mínimo 32 caracteres)")
         return missing
 
