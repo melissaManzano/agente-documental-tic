@@ -5,79 +5,97 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Archivo TIC IA | Agente documental</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="/assets/css/styles.css" rel="stylesheet">
     <link rel="icon" href="/assets/img/favicon.svg" type="image/svg+xml">
     <link rel="icon" href="/assets/img/favicon-32.png" type="image/png" sizes="32x32">
     <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
-    <meta name="theme-color" content="#122b49">
+    <meta name="theme-color" content="#102840">
 </head>
 
 <body>
-    <header class="hero py-4">
-        <div class="container d-flex flex-wrap justify-content-between align-items-center gap-3">
-            <div>
-                <div class="eyebrow">PRÁCTICA 2.3 · INTELIGENCIA ARTIFICIAL APLICADA A LAS TIC</div>
-                <h1 class="h2 mb-1">Archivo TIC <span>IA</span></h1>
-                <p class="m-0 text-white-50">Agente documental con Google Drive y búsqueda semántica RAG</p>
+    <header class="hero">
+        <div class="container hero-inner">
+            <div class="brand">
+                <img src="/assets/img/favicon.svg" alt="" class="brand-mark" width="56" height="56">
+                <div>
+                    <div class="eyebrow">Práctica 2.3 · Inteligencia artificial aplicada a las TIC</div>
+                    <h1 class="brand-title">Archivo TIC <span>IA</span></h1>
+                    <p class="brand-sub">Agente documental con Google Drive y búsqueda semántica RAG</p>
+                </div>
             </div>
-            <div class="d-flex flex-wrap align-items-center gap-2"><span
-                    class="badge rounded-pill border border-light text-light" id="health">Comprobando servidor…</span>
-                <div id="auth-box" class="d-flex align-items-center gap-2 small text-light"></div>
+            <div class="hero-actions">
+                <span class="status-pill" id="health">Comprobando servidor…</span>
+                <div id="auth-box" class="auth-box"></div>
             </div>
         </div>
     </header>
-    <main class="container py-4">
+
+    <main class="container workspace">
         <div class="row g-4">
-            <div class="col-lg-4">
-                <section class="card shell h-100">
-                    <div class="card-body">
-                        <div class="d-flex align-items-center justify-content-between">
-                            <h2 class="h5 mb-0">Base documental</h2><span class="badge text-bg-info"
-                                id="doc-count">0</span>
+            <aside class="col-lg-4">
+                <section class="panel library">
+                    <div class="panel-head">
+                        <div>
+                            <span class="step">Archivo</span>
+                            <h2 class="panel-title">Base documental</h2>
                         </div>
-                        <p class="small text-secondary mt-2">Archivos indexados desde una carpeta autorizada de Google
-                            Drive. Cada uno incluye un resumen y preguntas sugeridas: haz clic en una para usarla.</p>
-                        <div id="documents" class="doc-list" aria-live="polite">Sin documentos indexados.</div><button
-                            type="button" id="sync" class="btn btn-outline-primary w-100 mt-3">Sincronizar desde
-                            Drive</button>
-                        <p id="sync-note" class="small text-secondary mt-2 mb-0">La primera sincronización abrirá OAuth
-                            en el equipo donde corre Python. Uso exclusivamente local.</p>
+                        <span class="count" id="doc-count">0</span>
                     </div>
+                    <p class="panel-hint">Archivos indexados desde una carpeta autorizada de Google Drive. Cada uno
+                        incluye un resumen y preguntas sugeridas: haz clic en una para usarla.</p>
+                    <div id="documents" class="doc-list" aria-live="polite">Sin documentos indexados.</div>
+                    <button type="button" id="sync" class="btn btn-sync w-100">Sincronizar desde Drive</button>
+                    <p id="sync-note" class="panel-note">La primera sincronización abrirá OAuth en el equipo donde
+                        corre Python. Uso exclusivamente local.</p>
                 </section>
-            </div>
+            </aside>
+
             <div class="col-lg-8">
-                <section class="card shell">
-                    <div class="card-body">
-                        <h2 class="h5">Consultar al agente</h2><label class="form-label mt-2" for="question">Pregunta
-                            sobre los documentos</label><textarea class="form-control" id="question" rows="3"
-                            maxlength="3000" placeholder="¿Qué documentos explican Amazon RDS y sus conexiones?"
-                            required></textarea>
-                        <div class="d-flex flex-wrap justify-content-between gap-2 align-items-center mt-3">
-                            <div class="form-check form-switch"><input id="use-search" class="form-check-input"
-                                    type="checkbox" checked><label class="form-check-label" for="use-search">Activar
-                                    File Search (RAG)</label></div><button class="btn btn-primary" type="button"
-                                id="ask">Consultar agente</button>
+                <section class="panel">
+                    <div class="panel-head">
+                        <div>
+                            <span class="step">01</span>
+                            <h2 class="panel-title">Consultar al agente</h2>
                         </div>
-                        <div id="message" role="status" class="small mt-3" aria-live="polite"></div>
                     </div>
+                    <label class="field-label" for="question">Pregunta sobre los documentos</label>
+                    <textarea class="form-control question" id="question" rows="4" maxlength="3000"
+                        placeholder="¿Qué documentos explican Amazon RDS y sus conexiones?" required></textarea>
+                    <div class="ask-bar">
+                        <div class="form-check form-switch rag-switch">
+                            <input id="use-search" class="form-check-input" type="checkbox" checked>
+                            <label class="form-check-label" for="use-search">File Search (RAG)</label>
+                        </div>
+                        <div class="ask-actions">
+                            <span class="kbd-hint"><kbd>Ctrl</kbd> + <kbd>Enter</kbd></span>
+                            <button class="btn btn-ask" type="button" id="ask">Consultar agente</button>
+                        </div>
+                    </div>
+                    <div id="message" role="status" class="status-msg" aria-live="polite"></div>
                 </section>
-                <section class="card shell mt-4">
-                    <div class="card-body">
-                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
-                            <h2 class="h5 mb-0">Respuesta documental</h2><span id="answer-mode" class="badge"></span>
+
+                <section class="panel mt-4">
+                    <div class="panel-head">
+                        <div>
+                            <span class="step">02</span>
+                            <h2 class="panel-title">Respuesta documental</h2>
                         </div>
-                        <div id="answer" class="answer mt-3" aria-live="polite">Escribe una pregunta para comenzar.
-                        </div>
-                        <h3 class="h6 mt-4">Fuentes verificables</h3>
-                        <ul id="sources" class="list-group list-group-flush"></ul>
+                        <span id="answer-mode" class="mode-badge"></span>
                     </div>
+                    <div id="answer" class="answer is-empty" aria-live="polite">Escribe una pregunta para comenzar.</div>
+                    <h3 class="sources-title">Fuentes verificables</h3>
+                    <ul id="sources" class="sources"></ul>
                 </section>
             </div>
         </div>
     </main>
-    <footer class="container pb-4 small text-center text-secondary">Tecnológico Nacional de México · Campus Pachuca ·
-        Ingeniería en Sistemas Computacionales · Práctica 2.3 · Claudia Melissa Manzano Luna</footer>
+
+    <footer class="site-footer container">Tecnológico Nacional de México · Campus Pachuca · Ingeniería en Sistemas
+        Computacionales · Práctica 2.3 · Claudia Melissa Manzano Luna</footer>
     <script type="module" src="/assets/js/app.js"></script>
 </body>
 
