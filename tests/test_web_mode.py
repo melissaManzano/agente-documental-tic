@@ -52,6 +52,19 @@ def test_sin_contrasena_el_sitio_web_es_publico(monkeypatch):
     assert c.get("/api/health").json() == {"status": "ok"}
 
 
+def test_access_password_se_ignora_sin_require_password(monkeypatch):
+    # Caso de Vercel: ACCESS_PASSWORD sigue definida, pero sin REQUIRE_PASSWORD el sitio es público.
+    import importlib
+    from app.core import config
+    monkeypatch.setenv("ACCESS_PASSWORD", "clave-de-prueba-123")
+    monkeypatch.delenv("REQUIRE_PASSWORD", raising=False)
+    assert importlib.reload(config).Settings().access_password == ""
+    monkeypatch.setenv("REQUIRE_PASSWORD", "true")
+    assert importlib.reload(config).Settings().access_password == "clave-de-prueba-123"
+    monkeypatch.delenv("REQUIRE_PASSWORD")
+    importlib.reload(config)
+
+
 def test_health_no_revela_configuracion():
     assert cliente().get("/api/health").json() == {"status": "ok"}
 

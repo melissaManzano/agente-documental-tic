@@ -4,6 +4,10 @@ from dataclasses import dataclass
 from dotenv import load_dotenv
 load_dotenv()
 
+# La contraseña web solo se usa si se pide explícitamente; sin REQUIRE_PASSWORD el sitio es público
+# aunque ACCESS_PASSWORD siga definida en Vercel.
+_REQUIRE_PASSWORD = os.getenv("REQUIRE_PASSWORD", "").strip().lower() in ("1", "true", "si", "sí", "yes")
+
 @dataclass(frozen=True)
 class Settings:
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
@@ -13,14 +17,14 @@ class Settings:
     local_admin_key: str = os.getenv("LOCAL_ADMIN_KEY", "")
     # Modo web (Vercel): se activa en Vercel o con APP_MODE=web. Ver docs/despliegue-vercel.md.
     web_mode: bool = bool(os.getenv("VERCEL")) or os.getenv("APP_MODE", "").lower() == "web"
-    access_password: str = os.getenv("ACCESS_PASSWORD", "")
+    access_password: str = os.getenv("ACCESS_PASSWORD", "") if _REQUIRE_PASSWORD else ""
     session_secret: str = os.getenv("SESSION_SECRET", "")
 
     def missing_web_settings(self) -> list[str]:
         """Nombres (nunca valores) de las variables obligatorias que faltan en modo web.
 
-        ACCESS_PASSWORD es opcional: vacía = sitio público; con valor = se pide contraseña
-        y entonces SESSION_SECRET también es obligatoria.
+        La contraseña es opcional: sin REQUIRE_PASSWORD (o con ACCESS_PASSWORD vacía) el sitio es
+        público; con ambas se pide contraseña y entonces SESSION_SECRET también es obligatoria.
         """
         required = {"OPENAI_API_KEY": self.openai_api_key, "VECTOR_STORE_ID": self.vector_store_id}
         if self.access_password:

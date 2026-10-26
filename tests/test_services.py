@@ -98,6 +98,9 @@ def test_sync_sin_cambios_no_vuelve_a_subir():
     assert stats["unchanged"] == 1 and files.count == 1
 
 
+DENTRO = NS(is_relevant=lambda question, documents: True)   # filtro de alcance que deja pasar todo
+
+
 def respuesta(*annotations):
     content = NS(annotations=list(annotations))
     return NS(output=[NS(content=[content])], output_text="respuesta")
@@ -112,7 +115,7 @@ def test_fuentes_solo_de_citas_verificadas():
                      NS(type="url_citation", file_id=""))
     calls = []
     client = NS(responses=NS(create=lambda **kw: calls.append(kw) or resp))
-    result = AgentService(client=client).ask("¿RTO?", use_search=True)
+    result = AgentService(client=client, guard=DENTRO).ask("¿RTO?", use_search=True)
     assert result["sources"] == [{"name": "guia.pdf", "url": "https://drive.google.com/file/d/a/view"}]
     assert calls[0]["tools"][0]["vector_store_ids"] == ["vs_test"]
 
@@ -120,11 +123,11 @@ def test_fuentes_solo_de_citas_verificadas():
 def test_sin_file_search_no_envia_herramientas():
     calls = []
     client = NS(responses=NS(create=lambda **kw: calls.append(kw) or respuesta()))
-    result = AgentService(client=client).ask("¿RTO?", use_search=False)
+    result = AgentService(client=client, guard=DENTRO).ask("¿RTO?", use_search=False)
     assert "tools" not in calls[0] and result["sources"] == []
 
 
 def test_file_search_requiere_sincronizar_primero():
     client = NS(responses=NS(create=lambda **kw: respuesta()))
     with pytest.raises(ValueError):
-        AgentService(client=client).ask("¿RTO?", use_search=True)
+        AgentService(client=client, guard=DENTRO).ask("¿RTO?", use_search=True)
