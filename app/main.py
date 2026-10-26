@@ -29,13 +29,14 @@ def create_app(cfg: Settings) -> FastAPI:
         if missing:
             # Falla al arrancar (visible en los logs de Vercel) en lugar de quedar abierta.
             raise RuntimeError("Modo web sin configurar. Faltan variables: " + ", ".join(missing))
-        from app.core.auth import WebAuth
-        auth = WebAuth(cfg)
-        app.add_middleware(SessionMiddleware, secret_key=cfg.session_secret, session_cookie="archivo_tic_session",
-                           max_age=8 * 3600, same_site="lax", https_only=True)
+        if cfg.access_password:  # sin ACCESS_PASSWORD el sitio web es público (uso escolar)
+            from app.core.auth import WebAuth
+            auth = WebAuth(cfg)
+            app.add_middleware(SessionMiddleware, secret_key=cfg.session_secret, session_cookie="archivo_tic_session",
+                               max_age=8 * 3600, same_site="lax", https_only=True)
 
     def require_user(request: Request):
-        """Modo local: sin cuentas (uso en la propia computadora). Modo web: sesión obligatoria."""
+        """Sin contraseña configurada (local o web público) no hay cuentas; con contraseña, sesión obligatoria."""
         return auth.current_user(request) if auth else None
 
     def local_only(request: Request):
@@ -74,11 +75,12 @@ def create_app(cfg: Settings) -> FastAPI:
 
     @app.get("/api/me")
     def me(request: Request):
-        if not auth: return {"mode": "local", "user": None}
+        mode = "web" if cfg.web_mode else "local"
+        if not auth: return {"mode": mode, "auth": False, "user": None}
         try:
-            return {"mode": "web", "user": auth.current_user(request)}
+            return {"mode": mode, "auth": True, "user": auth.current_user(request)}
         except HTTPException:
-            return {"mode": "web", "user": None}
+            return {"mode": mode, "auth": True, "user": None}
 
     @app.post("/auth/login")
     def login(payload: LoginRequest, request: Request):

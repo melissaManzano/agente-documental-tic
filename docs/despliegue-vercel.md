@@ -8,11 +8,11 @@ qué errores aparecieron y cómo se corrigieron. **El prototipo local no cambia 
 | | Modo local (`python app.py`) | Modo web (Vercel) |
 |---|---|---|
 | Se activa | Por defecto | Automáticamente si existe `VERCEL`, o con `APP_MODE=web` |
-| Acceso | Sin cuentas (equipo propio) | Contraseña compartida `ACCESS_PASSWORD` (`POST /auth/login`, solo JSON) |
-| Sesión | — | Cookie firmada (`SESSION_SECRET`), `Secure`, `SameSite=Lax`, 8 h; se invalida si cambia la contraseña |
+| Acceso | Sin cuentas (equipo propio) | **Público** si `ACCESS_PASSWORD` está vacía (configuración actual); con valor, contraseña compartida (`POST /auth/login`, solo JSON) |
+| Sesión | — | Solo con contraseña: cookie firmada (`SESSION_SECRET`), `Secure`, `SameSite=Lax`, 8 h; se invalida si cambia la contraseña |
 | Lectura de Drive | OAuth Desktop (`drive.readonly`), `token.json` | **No accede a Drive** |
 | `POST /api/sync` | Solo loopback (+ `X-Admin-Key` opcional) | **403 siempre** |
-| `GET /api/documents`, `POST /api/ask` | Abiertos en localhost | **Requieren sesión** (401) |
+| `GET /api/documents`, `POST /api/ask` | Abiertos en localhost | Abiertos si es público; con contraseña, **requieren sesión** (401) |
 | Catálogo de documentos y citas | `data/manifest.json` | `attributes` de cada archivo del Vector Store |
 | `GET /api/health` | Incluye `configured` | Solo `{"status":"ok"}` |
 
@@ -26,18 +26,22 @@ correos), pero exige crear un cliente OAuth *Web* y configurar unas 8 variables.
 reto se eligió una contraseña compartida: 4 variables y ningún cambio en Google Cloud. Protege los
 créditos de OpenAI y el índice, aunque no identifica a cada persona (ver limitaciones).
 
+**Acceso público (decisión final).** Como el proyecto es escolar y sus documentos son ficticios, se
+dejó `ACCESS_PASSWORD` vacía para que cualquiera pueda consultar sin contraseña. Se acepta el riesgo
+de que terceros consuman créditos; el límite es el saldo prepagado de OpenAI. La API Key sigue sin
+salir del servidor y la sincronización sigue cerrada. Para volver a exigir contraseña basta con
+definir `ACCESS_PASSWORD` y `SESSION_SECRET` en Vercel y volver a desplegar.
+
 ## 2. Variables de entorno en Vercel
 
 *Project → Settings → Environment Variables* (Production y Preview). Tras cambiarlas hay que **volver a desplegar**.
 
 | Variable | Tipo | Valor |
 |---|---|---|
-| Variable | Tipo | Valor |
-|---|---|---|
 | `OPENAI_API_KEY` | Secret | Clave **distinta** a la local, con presupuesto propio |
 | `VECTOR_STORE_ID` | Config | ID `vs_...` de `data/manifest.json` |
-| `ACCESS_PASSWORD` | Secret | ≥ 12 caracteres; se comparte solo con quien debe consultar |
-| `SESSION_SECRET` | Secret | ≥ 32 caracteres aleatorios: `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
+| `ACCESS_PASSWORD` | Secret | **Opcional.** Vacía = sitio público. Con valor (≥ 12 caracteres) se pide contraseña |
+| `SESSION_SECRET` | Secret | Solo si hay contraseña: ≥ 32 caracteres aleatorios (`python -c "import secrets; print(secrets.token_urlsafe(48))"`) |
 | `OPENAI_MODEL` | Config | Opcional; por defecto `gpt-4.1-mini` |
 
 No se configuran: `GOOGLE_DRIVE_FOLDER_ID`, `LOCAL_ADMIN_KEY`, `PORT`, `credentials.json`, `token.json`.
@@ -72,11 +76,11 @@ Si falta alguna obligatoria, la app **no arranca** y el log muestra los nombres 
 
 ## 6. Limitaciones conocidas
 
-- Una sola contraseña compartida: no identifica a cada persona ni permite revocar a alguien en
-  particular (se cambia `ACCESS_PASSWORD` y se vuelve a desplegar; las sesiones previas caducan).
-  Trabajo futuro: Google Sign-In con lista de correos.
-- Cada intento fallido espera 1 s, pero no hay bloqueo por IP; usar una contraseña larga
-  (opcional: regla de *Rate Limit* del Vercel WAF sobre `/auth/login` y `/api/ask`).
+- En modo público cualquiera con la URL puede hacer consultas que se cobran a la cuenta de OpenAI;
+  el tope es el saldo prepagado (recomendado: sin recarga automática).
+- Con contraseña: una sola compartida, que no identifica a cada persona; cada intento fallido espera
+  1 s, pero no hay bloqueo por IP (opcional: regla de *Rate Limit* del Vercel WAF sobre `/auth/login`
+  y `/api/ask`). Trabajo futuro: Google Sign-In con lista de correos.
 - Todos los usuarios ven el mismo índice: no hay permisos por documento.
 - El tope de gasto es el presupuesto del proyecto de OpenAI.
 - La sincronización automática desde Vercel (Cron + cuenta de servicio) queda como trabajo futuro.
